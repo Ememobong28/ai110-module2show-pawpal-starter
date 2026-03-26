@@ -81,8 +81,11 @@ Third, there was no validation anywhere — nothing stopped someone from passing
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+The scheduler considers three constraints: available time (how many minutes the owner has free), task priority (high/medium/low), and task completion status (pending tasks only enter the schedule).
+
+Time was the most important constraint to get right because it is the hard limit — you cannot schedule more care than the day allows. Priority came second because it determines what gets cut when time runs out. Completion status came third; it is essentially a filter that keeps already-done tasks from cluttering the plan.
+
+I chose not to make species a constraint even though it could be — a dog needs walks and a cat doesn't. That would have added a rules engine and felt like over-engineering for a first version. It is the kind of thing you add in iteration two once the core loop is solid.
 
 **b. Tradeoffs**
 
@@ -98,13 +101,15 @@ The tradeoff is: the checker misses realistic scenarios like "back-to-back walks
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+AI was most useful during the design and algorithm phases. In the design phase, I described the app scenario and asked for a list of classes and responsibilities — that gave me a starting point much faster than a blank page would have. For algorithms, I asked specific questions like "how do I sort a list of objects by two keys in Python" and got a working lambda pattern immediately rather than searching documentation.
+
+The most effective prompts were ones that included context and a constraint — for example, "given this Task dataclass with a priority field, suggest a sort key that orders by priority then by duration." Vague prompts like "help me sort tasks" produced generic answers. Specific prompts with the actual class name and fields produced code I could use almost directly.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+The clearest moment was when AI suggested making `Schedule` a dataclass to match `Task` and `Pet`. The suggestion was technically consistent, but I rejected it because `Schedule` is built up incrementally during scheduling — its lists are mutated as tasks are added one by one. A dataclass works best for objects whose fields are set at construction and then read. Using a plain class with `__init__` made that intention clearer.
+
+I verified this by asking: "if I freeze this dataclass or use it as a value type, does the scheduling loop still work?" The answer was no — you would need `field(default_factory=list)` and the class would still behave like a regular mutable object. So the dataclass decorator would have been decoration without benefit. I kept the plain class and added a comment explaining why.
 
 ---
 
@@ -112,13 +117,15 @@ The tradeoff is: the checker misses realistic scenarios like "back-to-back walks
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+The test suite covers 13 behaviors across five areas: task completion status, sort order (priority and duration tiebreaker), recurrence (daily, weekly, and as-needed), conflict detection (overlapping and touching-but-not-overlapping times), filtering by pet and status, and two edge cases — zero available time and a pet with no tasks.
+
+The recurrence and conflict tests were the most important. Recurrence is where off-by-one date bugs are most likely to hide, and conflict detection has a boundary condition (`a_end == b_start` should not be a conflict) that is easy to get wrong. Having explicit tests for both gave me confidence that the logic was right rather than just probably right.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+★★★★☆ — four out of five.
+
+The scheduling logic, sorting, filtering, and recurrence are all well-covered by tests. The main gap is the Streamlit UI layer, which is not tested at all. If I had more time I would test: tasks where the total duration exactly equals available_minutes (boundary), completing a task that does not exist (should not crash), and two pets with tasks that share the same title (to check that complete_task targets the right one).
 
 ---
 
@@ -126,12 +133,16 @@ The tradeoff is: the checker misses realistic scenarios like "back-to-back walks
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The part I am most satisfied with is the relationship between `Owner`, `Pet`, and `Task`. Having `Owner` manage a list of pets, each of which owns its own task list, made the filtering and scheduling methods feel natural to write. `owner.get_pending_tasks()` reads like plain English and the implementation is exactly what you would expect. That usually means the design is right.
+
+The recurrence feature also came out cleaner than expected. Putting `next_occurrence()` on `Task` and `complete_task()` on `Pet` kept each class responsible for its own behavior. `Pet` does not need to know how dates work, and `Task` does not need to know it belongs to a pet.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+The Streamlit UI needs a "Mark complete" confirmation step — right now clicking the button immediately commits the action with no undo. For a daily care app where someone might fat-finger the wrong task in the morning, that could be frustrating. I would add a small confirmation dialog or at least a short success message with an undo option.
+
+I would also give tasks an optional notes field. A lot of real pet care tasks have context — "give the blue pill, not the white one" — and there is currently nowhere to put that.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+The most important thing I learned is that AI is a fast first draft, not a final answer. Every AI suggestion in this project needed me to ask "does this actually fit the design I have, or is it a generic answer that happens to look right?" The cases where I accepted suggestions without that check were the cases where I had to go back and fix something later. Acting as the architect — deciding what goes where and why — is the job that AI cannot do for you, and it turns out that job is most of what makes a system good or bad.

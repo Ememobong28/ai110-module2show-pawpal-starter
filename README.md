@@ -55,6 +55,31 @@ Core scheduling logic is well-covered. Lower confidence on the UI layer (Streaml
 
 ---
 
+## Features
+
+| Feature | Description |
+|---|---|
+| Multi-pet support | Add as many pets as you need; each owns its own task list |
+| Priority scheduling | High-priority tasks are always planned first; shorter tasks win tiebreaks |
+| Conflict detection | Tasks with overlapping fixed start times trigger a clear warning before the plan is shown |
+| Recurring tasks | Daily and weekly tasks automatically queue the next occurrence when marked complete |
+| Filtering | View tasks by pet or by completion status (pending / done) |
+| Skipped task explanation | Any task that doesn't fit the available time window is listed with a reason |
+| Progress bar | Visual indicator of how much of the day's available time the plan uses |
+
+## 📸 Demo
+
+_Add a screenshot of your running Streamlit app here using the embed syntax below:_
+
+```html
+<a href="/course_images/ai110/pawpal_screenshot.png" target="_blank">
+  <img src='/course_images/ai110/pawpal_screenshot.png' title='PawPal App'
+       width='' alt='PawPal App' class='center-block' />
+</a>
+```
+
+---
+
 ## Smarter Scheduling
 
 PawPal+ goes beyond a simple task list with four algorithmic features:
