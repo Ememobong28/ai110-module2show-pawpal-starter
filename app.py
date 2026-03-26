@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from pawpal_system import Owner, Pet, Task, Scheduler
 
@@ -5,9 +6,24 @@ st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 st.title("🐾 PawPal+")
 st.caption("Smart daily care planning for your pets.")
 
+DATA_FILE = "data.json"
+
+PRIORITY_EMOJI = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+SPECIES_EMOJI  = {"dog": "🐶", "cat": "🐱", "other": "🐾"}
+
 # --- Session state initialisation ---
+# Load from data.json if it exists; otherwise start fresh.
 if "owner" not in st.session_state:
-    st.session_state.owner = Owner(name="Jordan", available_minutes=60)
+    if os.path.exists(DATA_FILE):
+        st.session_state.owner = Owner.load_from_json(DATA_FILE)
+    else:
+        st.session_state.owner = Owner(name="Jordan", available_minutes=60)
+
+
+def save():
+    """Persist current state to disk."""
+    st.session_state.owner.save_to_json(DATA_FILE)
+
 
 # ── Owner info ────────────────────────────────────────────────────────────────
 st.subheader("Owner Info")
@@ -23,6 +39,7 @@ with col2:
 if st.button("Update owner"):
     st.session_state.owner.name = owner_name
     st.session_state.owner.available_minutes = int(available_minutes)
+    save()
     st.success(f"Updated: {owner_name}, {available_minutes} min available today.")
 
 st.divider()
@@ -45,13 +62,15 @@ if add_pet:
         st.warning(f"**{pet_name}** is already in your list.")
     else:
         st.session_state.owner.add_pet(Pet(name=pet_name, species=species))
-        st.success(f"Added **{pet_name}** the {species}!")
+        save()
+        st.success(f"Added {SPECIES_EMOJI.get(species, '🐾')} **{pet_name}** the {species}!")
 
 if st.session_state.owner.pets:
     for pet in st.session_state.owner.pets:
+        icon = SPECIES_EMOJI.get(pet.species, "🐾")
         pending = len(pet.pending_tasks())
         total = len(pet.tasks)
-        st.markdown(f"- **{pet.name}** ({pet.species}) — {pending} pending / {total} total task(s)")
+        st.markdown(f"- {icon} **{pet.name}** ({pet.species}) — {pending} pending / {total} total task(s)")
 else:
     st.info("No pets yet. Add one above.")
 
@@ -93,14 +112,16 @@ else:
             frequency=frequency,
             start_time=start_time.strip() or None,
         ))
-        st.success(f"Added **'{task_title}'** to {target_pet}.")
+        save()
+        st.success(f"{PRIORITY_EMOJI[priority]} Added **'{task_title}'** to {target_pet}.")
 
-    # Task table
+    # Task table with emoji priority column
     all_tasks = st.session_state.owner.get_all_tasks()
     if all_tasks:
         st.write("All tasks:")
         st.table([
             {
+                "": PRIORITY_EMOJI.get(t.priority, ""),
                 "pet": p.name,
                 "task": t.title,
                 "min": t.duration_minutes,
@@ -122,16 +143,20 @@ else:
         col1, col2 = st.columns([3, 1])
         with col1:
             task_to_complete = st.selectbox(
-                "Select task", [t.title for t in pending], label_visibility="collapsed"
+                "Select task",
+                [f"{PRIORITY_EMOJI.get(t.priority, '')} {t.title}" for t in pending],
+                label_visibility="collapsed"
             )
         with col2:
             if st.button("Mark done"):
+                raw_title = task_to_complete.split(" ", 1)[-1]
                 for pet in st.session_state.owner.pets:
                     titles = [t.title for t in pet.tasks]
-                    if task_to_complete in titles:
-                        pet.complete_task(task_to_complete)
+                    if raw_title in titles:
+                        pet.complete_task(raw_title)
                         break
-                st.success(f"**'{task_to_complete}'** marked complete.")
+                save()
+                st.success(f"**'{raw_title}'** marked complete.")
                 st.rerun()
 
 st.divider()
@@ -147,44 +172,46 @@ if st.button("Generate schedule", type="primary"):
     else:
         scheduler = Scheduler(owner)
 
-        # Conflict check — surface warnings before showing the plan
+        # Conflict check
         conflicts = scheduler.detect_conflicts(owner.get_pending_tasks())
         if conflicts:
-            st.error("**Time conflicts detected — review before your day starts:**")
+            st.error("**⚠️ Time conflicts detected — review before your day starts:**")
             for w in conflicts:
-                st.warning(f"⚠️ {w}")
+                st.warning(w)
 
         schedule = scheduler.generate()
         time_used = schedule.total_duration
         time_available = owner.available_minutes
         pct = int((time_used / time_available) * 100) if time_available else 0
 
-        st.success(
-            f"Schedule ready — **{time_used} of {time_available} min** used ({pct}%)."
-        )
+        st.success(f"Schedule ready — **{time_used} of {time_available} min** used ({pct}%).")
         st.progress(min(pct, 100))
 
         if schedule.planned_tasks:
-            st.markdown("**Planned tasks** (sorted by priority, shortest first on ties):")
+            st.markdown("**Planned tasks** (weighted score: priority + overdue bonus + frequency):")
             st.table([
                 {
+                    "": PRIORITY_EMOJI.get(t.priority, ""),
                     "task": t.title,
-                    "duration (min)": t.duration_minutes,
+                    "min": t.duration_minutes,
                     "priority": t.priority,
-                    "start time": t.start_time or "flexible",
+                    "score": round(t.weighted_score(), 1),
+                    "start": t.start_time or "flexible",
                 }
                 for t in schedule.planned_tasks
             ])
 
         if schedule.skipped_tasks:
-            st.warning(
-                f"**{len(schedule.skipped_tasks)} task(s) skipped** — not enough time remaining:"
-            )
+            st.warning(f"**{len(schedule.skipped_tasks)} task(s) skipped** — not enough time:")
             st.table([
-                {"task": t.title, "duration (min)": t.duration_minutes, "priority": t.priority}
+                {
+                    "": PRIORITY_EMOJI.get(t.priority, ""),
+                    "task": t.title,
+                    "min": t.duration_minutes,
+                    "priority": t.priority,
+                }
                 for t in schedule.skipped_tasks
             ])
 
-        # Plain-language summary
-        with st.expander("View schedule summary"):
+        with st.expander("View plain-text summary"):
             st.text(schedule.summary())

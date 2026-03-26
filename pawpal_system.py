@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import date, timedelta
@@ -23,6 +24,20 @@ class Task:
         mapping = {"high": 3, "medium": 2, "low": 1}
         return mapping.get(self.priority, 0)
 
+    def weighted_score(self) -> float:
+        """
+        Challenge 1 — weighted prioritization.
+        Score = priority points + overdue bonus + frequency urgency bonus.
+        Higher score → scheduled earlier.
+          - Overdue tasks gain +2 per day past due (capped at +10).
+          - Daily tasks gain +1 over weekly; as-needed tasks get no bonus.
+        """
+        base = self.priority_value() * 10
+        days_overdue = max(0, (date.today() - self.due_date).days)
+        overdue_bonus = min(days_overdue * 2, 10)
+        frequency_bonus = {"daily": 1, "weekly": 0, "as-needed": 0}.get(self.frequency, 0)
+        return base + overdue_bonus + frequency_bonus
+
     def mark_complete(self):
         """Mark this task as done."""
         self.completed = True
@@ -45,6 +60,32 @@ class Task:
             priority=self.priority,
             frequency=self.frequency,
             due_date=next_due,
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize this task to a plain dictionary for JSON storage."""
+        return {
+            "title": self.title,
+            "duration_minutes": self.duration_minutes,
+            "priority": self.priority,
+            "frequency": self.frequency,
+            "completed": self.completed,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "start_time": self.start_time,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Task":
+        """Reconstruct a Task from a plain dictionary."""
+        due = date.fromisoformat(data["due_date"]) if data.get("due_date") else None
+        return cls(
+            title=data["title"],
+            duration_minutes=data["duration_minutes"],
+            priority=data["priority"],
+            frequency=data.get("frequency", "daily"),
+            completed=data.get("completed", False),
+            due_date=due,
+            start_time=data.get("start_time"),
         )
 
 
@@ -75,6 +116,21 @@ class Pet:
                 if next_task:
                     self.tasks.append(next_task)
                 break
+
+    def to_dict(self) -> dict:
+        """Serialize this pet to a plain dictionary for JSON storage."""
+        return {
+            "name": self.name,
+            "species": self.species,
+            "tasks": [t.to_dict() for t in self.tasks],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Pet":
+        """Reconstruct a Pet from a plain dictionary."""
+        pet = cls(name=data["name"], species=data["species"])
+        pet.tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
+        return pet
 
 
 class Owner:
@@ -115,6 +171,32 @@ class Owner:
     def filter_tasks_by_status(self, completed: bool) -> List[Task]:
         """Return tasks across all pets that match the given completion status."""
         return [t for t in self.get_all_tasks() if t.completed == completed]
+
+    def to_dict(self) -> dict:
+        """Serialize the owner (and all nested pets/tasks) to a plain dictionary."""
+        return {
+            "name": self.name,
+            "available_minutes": self.available_minutes,
+            "pets": [p.to_dict() for p in self.pets],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Owner":
+        """Reconstruct an Owner (and all nested pets/tasks) from a plain dictionary."""
+        owner = cls(name=data["name"], available_minutes=data["available_minutes"])
+        owner.pets = [Pet.from_dict(p) for p in data.get("pets", [])]
+        return owner
+
+    def save_to_json(self, filepath: str = "data.json"):
+        """Persist the owner's full state to a JSON file."""
+        with open(filepath, "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+
+    @classmethod
+    def load_from_json(cls, filepath: str = "data.json") -> "Owner":
+        """Load and reconstruct an Owner from a JSON file."""
+        with open(filepath) as f:
+            return cls.from_dict(json.load(f))
 
 
 class Schedule:
@@ -189,13 +271,13 @@ class Scheduler:
 
     def generate(self) -> Schedule:
         """
-        Sort pending tasks by priority (highest first); break ties by duration
-        (shortest first so more tasks fit). Greedily fill available time.
-        Conflict warnings are printed but do not block scheduling.
+        Challenge 1 — weighted prioritization.
+        Sort by weighted_score() (priority + overdue bonus + frequency bonus),
+        break ties by shortest duration first. Greedily fill available time.
         """
         tasks = sorted(
             self.get_tasks(),
-            key=lambda t: (t.priority_value(), -t.duration_minutes),
+            key=lambda t: (t.weighted_score(), -t.duration_minutes),
             reverse=True,
         )
 
