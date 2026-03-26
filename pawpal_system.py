@@ -1,14 +1,22 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
+from datetime import date, timedelta
 
 
 @dataclass
 class Task:
     title: str
     duration_minutes: int
-    priority: str        # "low", "medium", or "high"
+    priority: str              # "low", "medium", or "high"
     frequency: str = "daily"   # "daily", "weekly", "as-needed"
     completed: bool = False
+    due_date: Optional[date] = None
+    start_time: Optional[str] = None   # "HH:MM" — set when user wants a fixed slot
+
+    def __post_init__(self):
+        """Default due_date to today if not provided."""
+        if self.due_date is None:
+            self.due_date = date.today()
 
     def priority_value(self) -> int:
         """Convert priority label to a number so tasks can be sorted."""
@@ -22,6 +30,22 @@ class Task:
     def mark_incomplete(self):
         """Reset this task to not done."""
         self.completed = False
+
+    def next_occurrence(self) -> Optional["Task"]:
+        """Return a fresh Task due on the next occurrence date, or None if not recurring."""
+        if self.frequency == "daily":
+            next_due = date.today() + timedelta(days=1)
+        elif self.frequency == "weekly":
+            next_due = date.today() + timedelta(weeks=1)
+        else:
+            return None
+        return Task(
+            title=self.title,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            frequency=self.frequency,
+            due_date=next_due,
+        )
 
 
 @dataclass
@@ -41,6 +65,16 @@ class Pet:
     def pending_tasks(self) -> List[Task]:
         """Return only tasks that have not been completed."""
         return [t for t in self.tasks if not t.completed]
+
+    def complete_task(self, title: str):
+        """Mark a task complete; if it recurs, append the next occurrence immediately."""
+        for task in self.tasks:
+            if task.title == title and not task.completed:
+                task.mark_complete()
+                next_task = task.next_occurrence()
+                if next_task:
+                    self.tasks.append(next_task)
+                break
 
 
 class Owner:
@@ -70,6 +104,17 @@ class Owner:
         for pet in self.pets:
             pending.extend(pet.pending_tasks())
         return pending
+
+    def filter_tasks_by_pet(self, pet_name: str) -> List[Task]:
+        """Return all tasks belonging to a specific pet by name."""
+        for pet in self.pets:
+            if pet.name == pet_name:
+                return list(pet.tasks)
+        return []
+
+    def filter_tasks_by_status(self, completed: bool) -> List[Task]:
+        """Return tasks across all pets that match the given completion status."""
+        return [t for t in self.get_all_tasks() if t.completed == completed]
 
 
 class Schedule:
@@ -110,12 +155,54 @@ class Scheduler:
         """Ask the Owner for all pending tasks across its pets."""
         return self.owner.get_pending_tasks()
 
+    def sort_by_time(self, tasks: List[Task]) -> List[Task]:
+        """Sort tasks shortest-first within the same priority level."""
+        return sorted(tasks, key=lambda t: t.duration_minutes)
+
+    def detect_conflicts(self, tasks: List[Task]) -> List[str]:
+        """
+        Check for tasks with overlapping fixed start times.
+        Returns a list of warning strings; empty list means no conflicts.
+        """
+        warnings = []
+        timed = [t for t in tasks if t.start_time is not None]
+
+        for i, a in enumerate(timed):
+            for b in timed[i + 1:]:
+                a_start = self._time_to_minutes(a.start_time)
+                a_end = a_start + a.duration_minutes
+                b_start = self._time_to_minutes(b.start_time)
+                b_end = b_start + b.duration_minutes
+
+                if a_start < b_end and b_start < a_end:
+                    warnings.append(
+                        f"Conflict: '{a.title}' ({a.start_time}, {a.duration_minutes} min) "
+                        f"overlaps with '{b.title}' ({b.start_time}, {b.duration_minutes} min)"
+                    )
+        return warnings
+
+    @staticmethod
+    def _time_to_minutes(time_str: str) -> int:
+        """Convert 'HH:MM' string to total minutes since midnight."""
+        h, m = map(int, time_str.split(":"))
+        return h * 60 + m
+
     def generate(self) -> Schedule:
         """
-        Sort pending tasks by priority (highest first), then greedily fit
-        them into the owner's available time. Tasks that don't fit are skipped.
+        Sort pending tasks by priority (highest first); break ties by duration
+        (shortest first so more tasks fit). Greedily fill available time.
+        Conflict warnings are printed but do not block scheduling.
         """
-        tasks = sorted(self.get_tasks(), key=lambda t: t.priority_value(), reverse=True)
+        tasks = sorted(
+            self.get_tasks(),
+            key=lambda t: (t.priority_value(), -t.duration_minutes),
+            reverse=True,
+        )
+
+        conflicts = self.detect_conflicts(tasks)
+        for warning in conflicts:
+            print(f"  WARNING: {warning}")
+
         schedule = Schedule()
         time_remaining = self.owner.available_minutes
 
