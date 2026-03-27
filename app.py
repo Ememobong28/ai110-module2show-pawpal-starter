@@ -183,9 +183,16 @@ if st.button("Generate schedule", type="primary"):
         time_used = schedule.total_duration
         time_available = owner.available_minutes
         pct = int((time_used / time_available) * 100) if time_available else 0
+        time_free = time_available - time_used
 
-        st.success(f"Schedule ready — **{time_used} of {time_available} min** used ({pct}%).")
-        st.progress(min(pct, 100))
+        # Metric cards — quick at-a-glance summary
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Time planned", f"{time_used} min")
+        m2.metric("Time free", f"{time_free} min")
+        m3.metric("Tasks scheduled", len(schedule.planned_tasks))
+        m4.metric("Tasks skipped", len(schedule.skipped_tasks))
+
+        st.progress(min(pct, 100), text=f"{pct}% of available time used")
 
         if schedule.planned_tasks:
             st.markdown("**Planned tasks** (weighted score: priority + overdue bonus + frequency):")
