@@ -69,14 +69,9 @@ Core scheduling logic is well-covered. Lower confidence on the UI layer (Streaml
 
 ## 📸 Demo
 
-_Add a screenshot of your running Streamlit app here using the embed syntax below:_
+<a href="Screenshot 2026-03-26 at 5.14.30 PM.png" target="_blank"><img src='Screenshot 2026-03-26 at 5.14.30 PM.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
 
-```html
-<a href="/course_images/ai110/pawpal_screenshot.png" target="_blank">
-  <img src='/course_images/ai110/pawpal_screenshot.png' title='PawPal App'
-       width='' alt='PawPal App' class='center-block' />
-</a>
-```
+<a href="Screenshot 2026-03-26 at 5.14.43 PM.png" target="_blank"><img src='Screenshot 2026-03-26 at 5.14.43 PM.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
 
 ---
 
