@@ -69,9 +69,9 @@ Core scheduling logic is well-covered. Lower confidence on the UI layer (Streaml
 
 ## 📸 Demo
 
-<a href="Screenshot 2026-03-26 at 5.14.30 PM.png" target="_blank"><img src='Screenshot 2026-03-26 at 5.14.30 PM.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+<a href="demo_1.png" target="_blank"><img src='demo_1.png' title='PawPal App - Task Management' width='' alt='PawPal App' class='center-block' /></a>
 
-<a href="Screenshot 2026-03-26 at 5.14.43 PM.png" target="_blank"><img src='Screenshot 2026-03-26 at 5.14.43 PM.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+<a href="demo_2.png" target="_blank"><img src='demo_2.png' title='PawPal App - Schedule View' width='' alt='PawPal App' class='center-block' /></a>
 
 ---
 
