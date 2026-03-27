@@ -143,6 +143,73 @@ The Streamlit UI needs a "Mark complete" confirmation step — right now clickin
 
 I would also give tasks an optional notes field. A lot of real pet care tasks have context — "give the blue pill, not the white one" — and there is currently nowhere to put that.
 
+---
+
+## 6. Prompt Comparison (Challenge 5)
+
+**Task compared:** Implementing `weighted_score()` on the `Task` class — a method that produces a numeric score combining priority, overdue status, and frequency urgency so the scheduler can rank tasks intelligently.
+
+---
+
+**GPT-4 approach**
+
+When asked the same question, GPT-4 returned a more verbose solution that used separate helper methods and an explicit `if/elif` chain:
+
+```python
+def get_priority_points(self):
+    if self.priority == "high":
+        return 30
+    elif self.priority == "medium":
+        return 20
+    else:
+        return 10
+
+def get_overdue_bonus(self):
+    days = (date.today() - self.due_date).days
+    if days <= 0:
+        return 0
+    return min(days * 2, 10)
+
+def get_frequency_bonus(self):
+    if self.frequency == "daily":
+        return 1
+    return 0
+
+def weighted_score(self):
+    return self.get_priority_points() + self.get_overdue_bonus() + self.get_frequency_bonus()
+```
+
+**Claude (this project) approach**
+
+```python
+def weighted_score(self) -> float:
+    base = self.priority_value() * 10
+    days_overdue = max(0, (date.today() - self.due_date).days)
+    overdue_bonus = min(days_overdue * 2, 10)
+    frequency_bonus = {"daily": 1, "weekly": 0, "as-needed": 0}.get(self.frequency, 0)
+    return base + overdue_bonus + frequency_bonus
+```
+
+---
+
+**Comparison**
+
+| Dimension | GPT-4 | Claude |
+|---|---|---|
+| Lines of code | ~16 | ~5 |
+| Readability | High — each concern is named | Medium — dense but scannable |
+| Reusability | High — helpers are independently testable | Low — logic is inlined |
+| Uses existing methods | No — duplicates priority logic | Yes — reuses `priority_value()` |
+| Dictionary lookup pattern | No | Yes — Pythonic for small mappings |
+
+**What I kept and why**
+
+I kept the Claude version because it reuses `priority_value()` rather than duplicating the priority-to-number mapping. Having that logic in two places would mean updating two places if priorities ever change. The dictionary lookup for `frequency_bonus` is also idiomatic Python — it is the pattern experienced Python developers reach for when mapping a small set of string values to numbers.
+
+The GPT-4 version is not wrong, and its helper methods would be genuinely useful if the scoring logic grew more complex or needed individual unit tests. For the current scope — three simple additive terms — splitting into four methods adds indirection without benefit.
+
+The key lesson: GPT-4 defaulted to an object-oriented decomposition that would scale well. Claude defaulted to a compact, in-place solution that fits the existing code style. Neither is universally better — it depends on whether you expect the method to grow.
+
 **c. Key takeaway**
 
 The most important thing I learned is that AI is a fast first draft, not a final answer. Every AI suggestion in this project needed me to ask "does this actually fit the design I have, or is it a generic answer that happens to look right?" The cases where I accepted suggestions without that check were the cases where I had to go back and fix something later. Acting as the architect — deciding what goes where and why — is the job that AI cannot do for you, and it turns out that job is most of what makes a system good or bad.
